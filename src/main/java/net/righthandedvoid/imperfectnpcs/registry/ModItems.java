@@ -4,13 +4,13 @@ import net.minecraft.world.item.Item;
 import net.neoforged.neoforge.common.DeferredSpawnEggItem;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
-import net.righthandedvoid.imperfectnpcs.PerfectNPCs;
+import net.righthandedvoid.imperfectnpcs.ImperfectNPCs;
 
 public final class ModItems {
 
     public static final DeferredRegister.Items ITEMS =
             DeferredRegister.createItems(
-                PerfectNPCs.MODID
+                ImperfectNPCs.MODID
             );
 
     public static final DeferredItem<Item> NPC_SPAWN_EGG =

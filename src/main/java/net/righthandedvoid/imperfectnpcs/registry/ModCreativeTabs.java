@@ -5,14 +5,14 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.registries.DeferredRegister;
-import net.righthandedvoid.imperfectnpcs.PerfectNPCs;
+import net.righthandedvoid.imperfectnpcs.ImperfectNPCs;
 
 import java.util.function.Supplier;
 
 public final class ModCreativeTabs {
 
     public static final DeferredRegister<CreativeModeTab> CREATIVE_MODE_TABS =
-            DeferredRegister.create(Registries.CREATIVE_MODE_TAB, PerfectNPCs.MODID);
+            DeferredRegister.create(Registries.CREATIVE_MODE_TAB, ImperfectNPCs.MODID);
 
     public static final Supplier<CreativeModeTab> MAIN =
             CREATIVE_MODE_TABS.register(
@@ -21,7 +21,7 @@ public final class ModCreativeTabs {
 
                             .title(
                                     Component.translatable(
-                                            "itemGroup." + PerfectNPCs.MODID + ".main"
+                                            "itemGroup." + ImperfectNPCs.MODID + ".main"
                                     )
                             )
 

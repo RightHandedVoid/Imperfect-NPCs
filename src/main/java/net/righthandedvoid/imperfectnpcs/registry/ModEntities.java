@@ -7,7 +7,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.registries.DeferredRegister;
-import net.righthandedvoid.imperfectnpcs.PerfectNPCs;
+import net.righthandedvoid.imperfectnpcs.ImperfectNPCs;
 import net.righthandedvoid.imperfectnpcs.entities.NPCEntity;
 
 import java.util.function.Supplier;
@@ -16,7 +16,7 @@ public final class ModEntities {
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
             DeferredRegister.create(
                 Registries.ENTITY_TYPE,
-                PerfectNPCs.MODID
+                ImperfectNPCs.MODID
             );
 
     public static final Supplier<EntityType<NPCEntity>> NPC =
@@ -29,7 +29,7 @@ public final class ModEntities {
                                     ResourceKey.create(
                                             Registries.ENTITY_TYPE,
                                             ResourceLocation.fromNamespaceAndPath(
-                                                    PerfectNPCs.MODID,
+                                                    ImperfectNPCs.MODID,
                                                     "npc"
                                             )
                                     ).toString()
