@@ -28,6 +28,17 @@ public class NPCEntityRenderer extends HumanoidMobRenderer<NPCEntity, PlayerMode
 
     @Override
     public @NotNull ResourceLocation getTextureLocation(@NotNull NPCEntity entity) {
-        return STEVE_TEXTURE;
+        String skinPath = entity.getSkinPath();
+        ResourceLocation skinLocation;
+
+        if (skinPath.isEmpty()) {
+            skinLocation = STEVE_TEXTURE;
+        } else {
+            skinLocation = ResourceLocation.tryParse(skinPath);
+
+            if (skinLocation == null) skinLocation = STEVE_TEXTURE;
+        }
+
+        return skinLocation;
     }
 }

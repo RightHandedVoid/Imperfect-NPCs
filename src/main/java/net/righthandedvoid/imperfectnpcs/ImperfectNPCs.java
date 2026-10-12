@@ -1,6 +1,8 @@
 package net.righthandedvoid.imperfectnpcs;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
@@ -15,6 +17,10 @@ import net.righthandedvoid.imperfectnpcs.registry.ModEntities;
 import net.righthandedvoid.imperfectnpcs.registry.ModItems;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptManager;
 import org.slf4j.Logger;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 @Mod(ImperfectNPCs.MODID)
 public class ImperfectNPCs {

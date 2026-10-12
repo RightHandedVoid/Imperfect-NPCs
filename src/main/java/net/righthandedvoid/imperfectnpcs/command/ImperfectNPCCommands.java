@@ -8,8 +8,10 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.commands.arguments.ResourceLocationArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.righthandedvoid.imperfectnpcs.api.NpcAPI;
@@ -81,13 +83,62 @@ public final class ImperfectNPCCommands {
                         )
                 )
 
-                    .then(
-                        Commands.literal("errors")
-                            .executes(
-                                ImperfectNPCCommands::listErrors
+                .then(
+                    Commands.literal("errors")
+                        .executes(
+                            ImperfectNPCCommands::listErrors
+                        )
+                )
+
+                .then(
+                    Commands.literal("edit")
+                        .then(
+                            Commands.argument(
+                                    "entity",
+                                    EntityArgument.entity()
                             )
-                    )
+                            .then(
+                                Commands.literal("skin")
+                                .then(
+                                    Commands.argument(
+                                            "skin",
+                                            ResourceLocationArgument.id()
+                                        )
+                                        .executes(
+                                            ImperfectNPCCommands::setNPCSkin
+                                        )
+                                )
+
+                            )
+                        )
+                )
         );
+    }
+
+    private static int setNPCSkin(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+
+        Entity entity = EntityArgument.getEntity(context, "entity");
+        ResourceLocation skin = ResourceLocationArgument.getId(context, "skin");
+
+        if (entity instanceof NPCEntity npc) {
+            npc.setSkinPath(skin.toString());
+
+            source.sendSuccess(
+                    () -> Component.literal(
+                            "Successfully changed the skin!"
+                    ),
+                    true
+            );
+
+            return 1;
+        } else {
+            source.sendFailure(
+                    Component.literal("Failed to change the skin! Selected Entity is not an NPC!")
+            );
+
+            return 0;
+        }
     }
 
     private static int listErrors(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
