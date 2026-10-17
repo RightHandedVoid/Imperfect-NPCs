@@ -17,6 +17,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.righthandedvoid.imperfectnpcs.api.NpcAPI;
 import net.righthandedvoid.imperfectnpcs.entities.NPCEntity;
+import net.righthandedvoid.imperfectnpcs.scripting.ScriptContext;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptManager;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptRecord;
 
@@ -267,7 +268,10 @@ public final class ImperfectNPCCommands {
             return 0;
         }
 
-        ScriptRecord scriptResult = ScriptManager.runScript(targetScript);
+        ScriptRecord scriptResult = ScriptManager.runScript(
+                targetScript,
+                ScriptContext.fromCommand(targetScript, source)
+        );
 
         if (scriptResult.scriptSuccess()) {
             source.sendSuccess(

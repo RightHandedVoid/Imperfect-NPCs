@@ -1,6 +1,7 @@
 package net.righthandedvoid.imperfectnpcs.scripting.lua;
 
 import com.mojang.logging.LogUtils;
+import net.righthandedvoid.imperfectnpcs.scripting.ScriptContext;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptManager;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptRecord;
 import org.luaj.vm2.*;
@@ -16,11 +17,21 @@ import java.util.HashMap;
 import java.util.Map;
 
 public final class LuaScriptRunner {
-    // I wonder how much of this I'll have to rewrite bc I don't understand why any of this has to be done
     private static final Logger logger = LogUtils.getLogger();
     private static final Map<String, Prototype> script_cache = new HashMap<>();
     private static final int MAX_INSTRUCTION_COUNT = 100000;
     private static Globals server_globals;
+
+    /**
+     * Thrown by the instruction hook. It extends Error rather than LuaError
+     * on purpose: Lua's pcall only catches LuaError/Exception, so a script
+     * can't wrap an infinite loop in pcall to escape the limit.
+     */
+    static final class ScriptTimeoutError extends Error {
+        ScriptTimeoutError(String scriptName) {
+            super(scriptName + " overran resource limits.");
+        }
+    }
 
     static class ReadOnlyLuaTable extends LuaTable {
         public ReadOnlyLuaTable(LuaValue table) {
@@ -76,7 +87,16 @@ public final class LuaScriptRunner {
         return new ScriptRecord(true, (scriptName + " compiled successfully"));
     }
 
-    public ScriptRecord run(String scriptName) {
+    public ScriptRecord run(String scriptName, ScriptContext context) {
+        Prototype prototype = script_cache.get(scriptName);
+
+        if (prototype == null) {
+            return new ScriptRecord(
+                    false,
+                    (scriptName + " failed to previously compile during reload.")
+            );
+        }
+
         Globals user_globals = new Globals();
 
         user_globals.load(new JseBaseLib());
@@ -99,39 +119,26 @@ public final class LuaScriptRunner {
         user_globals.set("package", LuaValue.NIL);
         user_globals.set("collectgarbage", LuaValue.NIL);
 
-        user_globals.set("print",  new LuaPrintFunction());
+        user_globals.set("print", new LuaPrintFunction(user_globals, context));
+        user_globals.set("npcs", LuaNPCLib.create(context));
         user_globals.get("string").set("rep", new LuaStringRepFunction());
 
-        try {
-            LuaClosure chunk;
+        LuaClosure chunk = new LuaClosure(prototype, user_globals);
 
-            if (script_cache.containsKey(scriptName)) {
-                chunk = new LuaClosure(
-                        script_cache.get(scriptName),
-                        user_globals
-                );
-
-            } else {
-                return new ScriptRecord(
-                        false,
-                        (scriptName + " failed to previously compile during reload.")
-                );
+        LuaValue hookFunction = new ZeroArgFunction() {
+            public LuaValue call() {
+                throw new ScriptTimeoutError(scriptName);
             }
+        };
 
-
-
-            LuaThread thread = new LuaThread(user_globals, chunk);
-
-            LuaValue hookFunction = new ZeroArgFunction() {
-                public LuaValue call() {
-                    throw new Error(scriptName + " overran resource limits.");
-                }
-            };
-
+        try {
+            // No thread argument: the hook attaches to this Globals' main thread,
+            // and the script runs right here on the server thread. (Running it in
+            // a LuaThread/coroutine would put it on a separate Java thread, which
+            // is unsafe once scripts touch the world.)
             sethook.invoke(
                     LuaValue.varargsOf(
                             new LuaValue[] {
-                                    thread,
                                     hookFunction,
                                     LuaValue.EMPTYSTRING,
                                     LuaValue.valueOf(MAX_INSTRUCTION_COUNT)
@@ -139,16 +146,29 @@ public final class LuaScriptRunner {
                     )
             );
 
-            Varargs result = thread.resume(LuaValue.NIL);
-            boolean resultSuccess = result.arg(1).checkboolean();
-            String resultErrorMessage = result.arg(2).toString().split("\n")[0]; // python reference?
+            chunk.call();
 
-            if (!resultSuccess) return new ScriptRecord(false, resultErrorMessage);
+        } catch (ScriptTimeoutError e) {
+            logger.warn("Lua script timeout: {}", e.getMessage());
+
+            return new ScriptRecord(false, e.getMessage());
 
         } catch (LuaError e) {
-            logger.warn("Lua script error: {}", e.getMessage());
+            String message = e.getMessage().split("\n")[0];
 
-            return new ScriptRecord(false, "Lua script error: " + e.getMessage());
+            logger.warn("Lua script error: {}", message);
+
+            return new ScriptRecord(false, "Lua script error: " + message);
+
+        } catch (StackOverflowError e) {
+            logger.warn("Lua script stack overflow in {}", scriptName);
+
+            return new ScriptRecord(false, "Lua script error: stack overflow (too much recursion)");
+
+        } catch (RuntimeException e) {
+            logger.error("Unexpected error in {}", scriptName, e);
+
+            return new ScriptRecord(false, "Internal error: " + e);
         }
 
         return new ScriptRecord(true, "Successfully ran " + scriptName);

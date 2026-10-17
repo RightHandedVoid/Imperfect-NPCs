@@ -37,9 +37,9 @@ public class ScriptManager {
     }
 
 
-    public static ScriptRecord runScript(String scriptName) {
+    public static ScriptRecord runScript(String scriptName, ScriptContext context) {
         return switch (scriptName.substring(scriptName.lastIndexOf('.') + 1)) {
-            case "lua" -> luaScriptRunner.run(scriptName);
+            case "lua" -> luaScriptRunner.run(scriptName, context);
 
             // there's definitely a better way to do this
 
