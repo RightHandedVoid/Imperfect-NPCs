@@ -1,20 +1,36 @@
 package net.righthandedvoid.imperfectnpcs.entities;
 
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.level.ServerLevelAccessor;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Objects;
 
 public class NPCEntity extends PathfinderMob {
     private static final EntityDataAccessor<String> SKIN_PATH = SynchedEntityData.defineId(
             NPCEntity.class,
             EntityDataSerializers.STRING
     );
+    private static final EntityDataAccessor<Boolean> HAS_WIDE_ARMS = SynchedEntityData.defineId(
+            NPCEntity.class,
+            EntityDataSerializers.BOOLEAN
+    );
+
+    private static final String SkinPath = "SkinPath";
+    private static final String HasWideArms = "HasWideArms";
 
     public NPCEntity(
             EntityType<? extends PathfinderMob> entityType,
@@ -27,7 +43,15 @@ public class NPCEntity extends PathfinderMob {
 
     public String getSkinPath() { return this.entityData.get(SKIN_PATH); }
 
+    public String getNpcName() { return Objects.requireNonNull(this.getCustomName()).getString(); }
+
+    public boolean getHasWideArms() { return this.entityData.get(HAS_WIDE_ARMS); }
+
     public void setSkinPath(String s) { this.entityData.set(SKIN_PATH, s); }
+
+    public void setNpcName(String s) { this.setCustomName(Component.literal(s)); }
+
+    public void setHasWideArms(boolean bool) { this.entityData.set(HAS_WIDE_ARMS, bool); }
 
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
@@ -41,25 +65,31 @@ public class NPCEntity extends PathfinderMob {
     }
 
     @Override
-    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+    protected void defineSynchedData(SynchedEntityData.@NotNull Builder builder) {
         super.defineSynchedData(builder);
 
         builder.define(SKIN_PATH, "");
+        builder.define(HAS_WIDE_ARMS, true);
     }
 
     @Override
-    public void addAdditionalSaveData(CompoundTag compound) {
+    public void addAdditionalSaveData(@NotNull CompoundTag compound) {
         super.addAdditionalSaveData(compound);
 
-        compound.putString("SkinPath", this.getSkinPath());
+        compound.putString(SkinPath, this.getSkinPath());
+        compound.putBoolean(HasWideArms, this.getHasWideArms());
     }
 
     @Override
-    public void readAdditionalSaveData(CompoundTag compound) {
+    public void readAdditionalSaveData(@NotNull CompoundTag compound) {
         super.readAdditionalSaveData(compound);
 
-        if (compound.contains("SkinPath")) {
-            this.setSkinPath(compound.getString("SkinPath"));
+        if (compound.contains(SkinPath)) {
+            this.setSkinPath(compound.getString(SkinPath));
+        }
+
+        if (compound.contains(HasWideArms)) {
+            this.setHasWideArms(compound.getBoolean(HasWideArms));
         }
     }
 }
