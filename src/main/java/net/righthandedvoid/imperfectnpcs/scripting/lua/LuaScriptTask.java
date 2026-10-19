@@ -142,7 +142,7 @@ final class LuaScriptTask {
 
             return new Result(Status.FAILED, "Lua script error: " + message);
 
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | LinkageError e) {
             logger.error("Unexpected error in {}", scriptName, e);
 
             return new Result(Status.FAILED, "Internal error: " + e);

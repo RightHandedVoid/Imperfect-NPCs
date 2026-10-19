@@ -9,6 +9,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.righthandedvoid.imperfectnpcs.command.ImperfectNPCCommands;
 import net.righthandedvoid.imperfectnpcs.registry.ModCreativeTabs;
 import net.righthandedvoid.imperfectnpcs.registry.ModEntities;
@@ -45,5 +46,10 @@ public class ImperfectNPCs {
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
         ScriptManager.onServerStop(event);
+    }
+
+    @SubscribeEvent
+    public static void onServerTick(ServerTickEvent.Post event) {
+        ScriptManager.tick(event.getServer());
     }
 }

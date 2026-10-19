@@ -9,6 +9,7 @@ import org.squiddev.cobalt.*;
 import org.squiddev.cobalt.function.LibFunction;
 
 import java.util.List;
+import java.util.TreeSet;
 import java.util.UUID;
 
 import static org.squiddev.cobalt.ValueFactory.valueOf;
@@ -134,8 +135,16 @@ public final class LuaNPCLib {
 
         LuaTable meta = new LuaTable();
 
-        // npc.anything looks the name up in methods.
-        meta.rawset("__index", methods);
+        // npc.anything looks the name up in methods. Asking for a name that
+        // doesn't exist is an error that lists what does, instead of
+        // returning nil and failing later with "attempt to call a nil value".
+        meta.rawset("__index", LibFunction.create((state, self, key) -> {
+            LuaValue method = methods.rawget(key);
+
+            if (!method.isNil()) return method;
+
+            throw new LuaError("NPCs have no method called '" + key + "'. Available methods: " + listKeys(methods));
+        }));
 
         // print(npc) shows "NPC[<uuid>]" instead of "userdata: 1a2b3c".
         meta.rawset("__tostring", LibFunction.create((state, self) ->
@@ -173,12 +182,30 @@ public final class LuaNPCLib {
         }));
     }
 
+    /** A sorted, comma-separated list of a table's keys, for error messages. */
+    private static String listKeys(LuaTable table) throws LuaError {
+        TreeSet<String> names = new TreeSet<>();
+
+        for (Varargs entry = table.next(Constants.NIL); !entry.first().isNil(); entry = table.next(entry.first())) {
+            names.add(entry.first().toString());
+        }
+
+        return String.join(", ", names);
+    }
+
     /** Converts Java exceptions into clean Lua errors that scripts can pcall. */
     private static <T> T guard(LuaAction<T> action) throws LuaError {
         try {
             return action.run();
         } catch (RuntimeException e) {
             throw new LuaError(e.getMessage() == null ? e.toString() : e.getMessage());
+        } catch (LinkageError e) {
+            // The Lua binding called a Java method that doesn't exist at
+            // runtime, e.g. a jar built from mismatched source files. The
+            // compiler normally catches this, but if it ever slips through,
+            // say so clearly instead of crashing the server tick.
+            throw new LuaError("This function isn't implemented on the Java side ("
+                    + e.getClass().getSimpleName() + ": " + e.getMessage() + ")");
         }
     }
 }

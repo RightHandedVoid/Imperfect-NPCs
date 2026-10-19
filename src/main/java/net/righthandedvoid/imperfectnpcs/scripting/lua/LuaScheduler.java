@@ -22,6 +22,17 @@ final class LuaScheduler {
 
     private final List<Waiting> waiting = new ArrayList<>();
 
+    /** The last tick tick() was called on, or -1 if it has never been called. */
+    private int lastTick = -1;
+
+    /**
+     * True if tick() is being called every server tick. If it isn't, waiting
+     * scripts would silently never resume.
+     */
+    boolean isTicking(int currentTick) {
+        return lastTick >= currentTick - 1;
+    }
+
     boolean isFull() {
         return waiting.size() >= MAX_WAITING_SCRIPTS;
     }
@@ -32,6 +43,8 @@ final class LuaScheduler {
     }
 
     void tick(int currentTick) {
+        lastTick = currentTick;
+
         if (waiting.isEmpty()) return;
 
         // Take the due tasks out first, then resume them. A resumed task that

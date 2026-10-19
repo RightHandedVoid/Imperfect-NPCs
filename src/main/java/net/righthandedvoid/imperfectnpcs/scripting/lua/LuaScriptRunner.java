@@ -84,7 +84,16 @@ public final class LuaScriptRunner {
             case FINISHED -> new ScriptRecord(true, "Successfully ran " + scriptName);
 
             case WAITING -> {
-                scheduler.add(task, context.getServerTick());
+                int currentTick = context.getServerTick();
+
+                if (!scheduler.isTicking(currentTick)) {
+                    // Without this check, the script would just never resume.
+                    logger.error("The Lua scheduler isn't being ticked. Is ScriptManager.tick() called from ServerTickEvent.Post?");
+
+                    yield new ScriptRecord(false, scriptName + " called wait(), but the script scheduler isn't running, so it could never resume.");
+                }
+
+                scheduler.add(task, currentTick);
 
                 yield new ScriptRecord(true, "Started " + scriptName + " (it's now waiting)");
             }

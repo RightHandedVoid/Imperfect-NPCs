@@ -30,11 +30,17 @@ public class ScriptManager {
     }
 
     public static void onServerStop(ServerStoppedEvent event) {
+        luaScriptRunner.cancelAllTasks();
+
         scriptDirectory = null;
         scriptSources.clear();
         scriptRecords.clear();
 
         luaScriptRunner.clearScriptCache();
+    }
+
+    public static void tick(MinecraftServer server) {
+        luaScriptRunner.tick(server.getTickCount());
     }
 
 
@@ -119,6 +125,8 @@ public class ScriptManager {
     }
 
     public static void reloadScripts() {
+        luaScriptRunner.cancelAllTasks();
+
         scriptSources.clear();
         scriptRecords.clear();
         luaScriptRunner.clearScriptCache();
