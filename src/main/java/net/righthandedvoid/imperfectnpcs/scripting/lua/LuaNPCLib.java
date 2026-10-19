@@ -5,108 +5,29 @@ import net.righthandedvoid.imperfectnpcs.api.NpcAPI;
 import net.righthandedvoid.imperfectnpcs.api.ScriptNPC;
 import net.righthandedvoid.imperfectnpcs.entities.NPCEntity;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptContext;
-import org.luaj.vm2.LuaError;
-import org.luaj.vm2.LuaTable;
-import org.luaj.vm2.LuaValue;
-import org.luaj.vm2.Varargs;
-import org.luaj.vm2.lib.OneArgFunction;
-import org.luaj.vm2.lib.TwoArgFunction;
-import org.luaj.vm2.lib.VarArgFunction;
+import org.squiddev.cobalt.*;
+import org.squiddev.cobalt.function.LibFunction;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.function.Supplier;
 
-import static org.luaj.vm2.LuaValue.NONE;
-import static org.luaj.vm2.LuaValue.valueOf;
-import static org.luaj.vm2.LuaValue.varargsOf;
+import static org.squiddev.cobalt.ValueFactory.valueOf;
+import static org.squiddev.cobalt.ValueFactory.varargsOf;
 
 /** Lua binding for the NPC API: the global `npcs` table and NPC objects. */
 public final class LuaNPCLib {
-    /** Methods every NPC object has. Built once and shared by all scripts. */
-    private static final LuaTable METHODS = new LuaTable();
-
-    /** Metatable for NPC userdata: method lookup, printing and comparison. */
-    private static final LuaTable META = new LuaTable();
-
     private static final double MAX_SEARCH_RADIUS = 128.0;
 
     /** One NPC method: gets the NPC (`self`) and the full argument list. */
     @FunctionalInterface
     private interface NpcMethod {
-        Varargs call(ScriptNPC npc, Varargs args);
+        Varargs call(ScriptNPC npc, Varargs args) throws LuaError;
     }
 
-    // Arguments start at 2 because argument 1 is always `self` (npc:method()).
-    static {
-        method("isValid", (npc, args) -> valueOf(npc.isValid()));
-        method("getUUID", (npc, args) -> valueOf(npc.getUUID()));
-        method("getName", (npc, args) -> valueOf(npc.getName()));
-
-        method("setName", (npc, args) -> {
-            npc.setName(args.checkjstring(2));
-            return NONE;
-        });
-
-        method("getSkin", (npc, args) -> valueOf(npc.getSkin()));
-
-        method("setSkin", (npc, args) -> {
-            npc.setSkin(args.checkjstring(2));
-            return NONE;
-        });
-
-        // local x, y, z = npc:getPosition()
-        method("getPosition", (npc, args) -> varargsOf(new LuaValue[] {
-                valueOf(npc.getX()), valueOf(npc.getY()), valueOf(npc.getZ())
-        }));
-
-        // npc:teleport(x, y, z)
-        method("teleport", (npc, args) -> {
-            npc.teleport(args.checkdouble(2), args.checkdouble(3), args.checkdouble(4));
-            return NONE;
-        });
-
-        // npc:walkTo(x, y, z [, speed]) -> true if a path was found
-        method("walkTo", (npc, args) -> valueOf(npc.walkTo(
-                args.checkdouble(2), args.checkdouble(3), args.checkdouble(4),
-                args.optdouble(5, 1.0)
-        )));
-
-        method("getHealth", (npc, args) -> valueOf(npc.getHealth()));
-
-        method("setHealth", (npc, args) -> {
-            npc.setHealth((float) args.checkdouble(2));
-            return NONE;
-        });
-
-        method("remove", (npc, args) -> {
-            npc.remove();
-            return NONE;
-        });
-
-        // npc.anything looks the name up in METHODS.
-        META.set(LuaValue.INDEX, METHODS);
-
-        // print(npc) shows "NPC[<uuid>]" instead of "userdata: 1a2b3c".
-        META.set(LuaValue.TOSTRING, new OneArgFunction() {
-            @Override
-            public LuaValue call(LuaValue self) {
-                ScriptNPC npc = (ScriptNPC) self.checkuserdata(ScriptNPC.class);
-
-                return valueOf("NPC[" + npc.getUUID() + "]");
-            }
-        });
-
-        // npc == otherNpc is true when both point at the same NPC.
-        META.set(LuaValue.EQ, new TwoArgFunction() {
-            @Override
-            public LuaValue call(LuaValue a, LuaValue b) {
-                return valueOf(a.touserdata().equals(b.touserdata()));
-            }
-        });
-
-        // getmetatable(npc) returns false, so scripts can't reach METHODS.
-        META.set(LuaValue.METATABLE, LuaValue.FALSE);
+    /** Like Supplier, but allowed to throw LuaError (which Cobalt makes a checked exception). */
+    @FunctionalInterface
+    private interface LuaAction<T> {
+        T run() throws LuaError;
     }
 
     private LuaNPCLib() {
@@ -114,92 +35,150 @@ public final class LuaNPCLib {
 
     /** Builds the global `npcs` table for one script run. */
     public static LuaTable create(ScriptContext context) {
+        LuaTable meta = createMetatable();
         LuaTable lib = new LuaTable();
 
         // npcs.spawn(x, y, z) -> npc
-        lib.set("spawn", new VarArgFunction() {
-            @Override
-            public Varargs invoke(Varargs args) {
-                Vec3 position = new Vec3(args.checkdouble(1), args.checkdouble(2), args.checkdouble(3));
+        lib.rawset("spawn", LibFunction.createV((state, args) -> {
+            Vec3 position = new Vec3(args.arg(1).checkDouble(), args.arg(2).checkDouble(), args.arg(3).checkDouble());
 
-                return guard(() -> wrap(new ScriptNPC(NpcAPI.spawn(context.getLevel(), position))));
-            }
-        });
+            return guard(() -> wrap(new ScriptNPC(NpcAPI.spawn(context.getLevel(), position)), meta));
+        }));
 
         // npcs.get(uuid) -> npc, or nil if no loaded NPC has that UUID
-        lib.set("get", new OneArgFunction() {
-            @Override
-            public LuaValue call(LuaValue uuid) {
-                String text = uuid.checkjstring();
+        lib.rawset("get", LibFunction.create((state, uuid) -> {
+            String text = uuid.checkString();
 
-                return guard(() -> {
-                    NPCEntity npc = NpcAPI.get(context.getLevel(), UUID.fromString(text));
+            return guard(() -> {
+                NPCEntity npc = NpcAPI.get(context.getLevel(), UUID.fromString(text));
 
-                    return npc == null ? NIL : wrap(new ScriptNPC(npc));
-                });
-            }
-        });
+                return npc == null ? Constants.NIL : wrap(new ScriptNPC(npc), meta);
+            });
+        }));
 
         // npcs.findNearby(x, y, z, radius) -> list of npcs, closest first
-        lib.set("findNearby", new VarArgFunction() {
-            @Override
-            public Varargs invoke(Varargs args) {
-                Vec3 center = new Vec3(args.checkdouble(1), args.checkdouble(2), args.checkdouble(3));
-                double radius = args.checkdouble(4);
+        lib.rawset("findNearby", LibFunction.createV((state, args) -> {
+            Vec3 center = new Vec3(args.arg(1).checkDouble(), args.arg(2).checkDouble(), args.arg(3).checkDouble());
+            double radius = args.arg(4).checkDouble();
 
-                if (radius <= 0 || radius > MAX_SEARCH_RADIUS) {
-                    throw new LuaError("radius must be greater than 0 and at most " + MAX_SEARCH_RADIUS);
+            if (radius <= 0 || radius > MAX_SEARCH_RADIUS) {
+                throw new LuaError("radius must be greater than 0 and at most " + MAX_SEARCH_RADIUS);
+            }
+
+            return guard(() -> {
+                List<NPCEntity> found = NpcAPI.findNearby(context.getLevel(), center, radius);
+                LuaTable list = new LuaTable(found.size(), 0);
+
+                for (int i = 0; i < found.size(); i++) {
+                    list.rawset(i + 1, wrap(new ScriptNPC(found.get(i)), meta));
                 }
 
-                return guard(() -> {
-                    List<NPCEntity> found = NpcAPI.findNearby(context.getLevel(), center, radius);
-                    LuaTable list = new LuaTable();
-
-                    for (int i = 0; i < found.size(); i++) {
-                        list.set(i + 1, wrap(new ScriptNPC(found.get(i))));
-                    }
-
-                    return list;
-                });
-            }
-        });
+                return list;
+            });
+        }));
 
         return lib;
     }
 
     /**
-     * Turns a ScriptNPC into a Lua object. It's userdata rather than a table,
-     * so scripts can't overwrite its methods, and every NPC shares one
-     * metatable instead of building its own set of functions.
+     * The metatable every NPC object in one run shares. It's built per run
+     * rather than once globally, so nothing is shared between LuaStates.
      */
-    public static LuaValue wrap(ScriptNPC npc) {
-        return LuaValue.userdataOf(npc, META);
+    private static LuaTable createMetatable() {
+        LuaTable methods = new LuaTable();
+
+        // Arguments start at 2 because argument 1 is always `self` (npc:method()).
+        method(methods, "isValid", (npc, args) -> valueOf(npc.isValid()));
+        method(methods, "getUUID", (npc, args) -> valueOf(npc.getUUID()));
+        method(methods, "getName", (npc, args) -> valueOf(npc.getName()));
+
+        method(methods, "setName", (npc, args) -> {
+            npc.setName(args.arg(2).checkString());
+            return Constants.NONE;
+        });
+
+        method(methods, "getSkin", (npc, args) -> valueOf(npc.getSkin()));
+
+        method(methods, "setSkin", (npc, args) -> {
+            npc.setSkin(args.arg(2).checkString());
+            return Constants.NONE;
+        });
+
+        // local x, y, z = npc:getPosition()
+        method(methods, "getPosition", (npc, args) ->
+                varargsOf(valueOf(npc.getX()), valueOf(npc.getY()), valueOf(npc.getZ())));
+
+        // npc:teleport(x, y, z)
+        method(methods, "teleport", (npc, args) -> {
+            npc.teleport(args.arg(2).checkDouble(), args.arg(3).checkDouble(), args.arg(4).checkDouble());
+            return Constants.NONE;
+        });
+
+        // npc:walkTo(x, y, z [, speed]) -> true if a path was found
+        method(methods, "walkTo", (npc, args) -> valueOf(npc.walkTo(
+                args.arg(2).checkDouble(), args.arg(3).checkDouble(), args.arg(4).checkDouble(),
+                args.arg(5).optDouble(1.0)
+        )));
+
+        method(methods, "getHealth", (npc, args) -> valueOf(npc.getHealth()));
+
+        method(methods, "setHealth", (npc, args) -> {
+            npc.setHealth((float) args.arg(2).checkDouble());
+            return Constants.NONE;
+        });
+
+        method(methods, "remove", (npc, args) -> {
+            npc.remove();
+            return Constants.NONE;
+        });
+
+        LuaTable meta = new LuaTable();
+
+        // npc.anything looks the name up in methods.
+        meta.rawset("__index", methods);
+
+        // print(npc) shows "NPC[<uuid>]" instead of "userdata: 1a2b3c".
+        meta.rawset("__tostring", LibFunction.create((state, self) ->
+                valueOf("NPC[" + checkNpc(self, "__tostring").getUUID() + "]")));
+
+        // getmetatable(npc) returns false, so scripts can't reach the methods table.
+        meta.rawset("__metatable", Constants.FALSE);
+
+        // No __eq needed: Cobalt compares userdata with ScriptNPC.equals()
+        // when they share a metatable, so npc == otherNpc already works,
+        // and NPCs can be used as table keys.
+        return meta;
+    }
+
+    /**
+     * Turns a ScriptNPC into a Lua object. It's userdata rather than a table,
+     * so scripts can't overwrite its methods.
+     */
+    private static LuaUserdata wrap(ScriptNPC npc, LuaTable meta) {
+        return ValueFactory.userdataOf(npc, meta);
+    }
+
+    private static ScriptNPC checkNpc(LuaValue value, String methodName) throws LuaError {
+        if (value instanceof LuaUserdata userdata && userdata.instance instanceof ScriptNPC npc) return npc;
+
+        throw new LuaError("NPC methods need a colon: npc:" + methodName + "(...)");
     }
 
     /** Registers one NPC method, checking that it was called with a colon. */
-    private static void method(String name, NpcMethod body) {
-        METHODS.set(name, new VarArgFunction() {
-            @Override
-            public Varargs invoke(Varargs args) {
-                if (!args.arg1().isuserdata(ScriptNPC.class)) {
-                    throw new LuaError("NPC methods need a colon: npc:" + name + "(...)");
-                }
+    private static void method(LuaTable methods, String name, NpcMethod body) {
+        methods.rawset(name, LibFunction.createV((state, args) -> {
+            ScriptNPC npc = checkNpc(args.first(), name);
 
-                ScriptNPC npc = (ScriptNPC) args.arg1().touserdata(ScriptNPC.class);
-
-                return guard(() -> body.call(npc, args));
-            }
-        });
+            return guard(() -> body.call(npc, args));
+        }));
     }
 
     /** Converts Java exceptions into clean Lua errors that scripts can pcall. */
-    private static <T> T guard(Supplier<T> action) {
+    private static <T> T guard(LuaAction<T> action) throws LuaError {
         try {
-            return action.get();
-        } catch (LuaError e) {
-            throw e;
+            return action.run();
         } catch (RuntimeException e) {
-            throw new LuaError(e.getMessage());
+            throw new LuaError(e.getMessage() == null ? e.toString() : e.getMessage());
         }
     }
 }

@@ -1,7 +1,6 @@
 package net.righthandedvoid.imperfectnpcs.scripting;
 
 import com.mojang.logging.LogUtils;
-import it.unimi.dsi.fastutil.Hash;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -13,8 +12,10 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Stream;
 
 public class ScriptManager {
