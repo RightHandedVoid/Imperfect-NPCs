@@ -30,118 +30,202 @@ public final class ImperfectNPCCommands {
             CommandDispatcher<CommandSourceStack> dispatcher
     ) {
         dispatcher.register(Commands.literal("npcs")
-            .requires(cs -> cs.hasPermission(2))
+                .requires(cs -> cs.hasPermission(2))
 
-            .then(
-                Commands.literal("spawn")
                 .then(
-                    Commands.argument(
-                    "position",
-                        Vec3Argument.vec3()
-                    )
-                    .executes(
-                        ImperfectNPCCommands::spawnNpc
-                    )
+                        Commands.literal("spawn")
+                                .then(
+                                        Commands.argument(
+                                                        "position",
+                                                        Vec3Argument.vec3()
+                                                )
+                                                .executes(
+                                                        ImperfectNPCCommands::spawnNpc
+                                                )
+                                )
                 )
-            )
 
-            .then(
-                Commands.literal("remove")
                 .then(
-                    Commands.argument(
-                        "targets",
-                        EntityArgument.entities()
-                    )
-                    .executes(
-                        ImperfectNPCCommands::removeNPCs
-                    )
+                        Commands.literal("remove")
+                                .then(
+                                        Commands.argument(
+                                                        "targets",
+                                                        EntityArgument.entities()
+                                                )
+                                                .executes(
+                                                        ImperfectNPCCommands::removeNPCs
+                                                )
+                                )
                 )
-            )
 
-            .then(
-                Commands.literal("edit")
                 .then(
-                    Commands.argument(
-                        "entity",
-                        EntityArgument.entity()
-                    )
-                    .then(
-                        Commands.literal("skin")
-                        .then(
-                            Commands.argument(
-                                "skin",
-                                ResourceLocationArgument.id()
-                            )
-                            .executes(
-                                ImperfectNPCCommands::setNPCSkin
-                            )
-                        )
-                    )
-                    .then(
-                        Commands.literal("name")
-                        .then(
-                            Commands.argument(
-                                "name",
-                                StringArgumentType.string()
-                            )
-                            .executes(
-                                ImperfectNPCCommands::setNPCName
-                            )
-                        )
-                    )
-                    .then(
-                        Commands.literal("wide_arms")
-                        .then(
-                            Commands.argument(
-                                "wide_arms",
-                                BoolArgumentType.bool()
-                            )
-                            .executes(
-                                ImperfectNPCCommands::setNPCArms
-                            )
-                        )
-                    )
+                        Commands.literal("edit")
+                                .then(
+                                        Commands.argument(
+                                                        "entity",
+                                                        EntityArgument.entity()
+                                                )
+                                                .then(
+                                                        Commands.literal("skin")
+                                                                .then(
+                                                                        Commands.argument(
+                                                                                        "skin",
+                                                                                        ResourceLocationArgument.id()
+                                                                                )
+                                                                                .executes(
+                                                                                        ImperfectNPCCommands::setNPCSkin
+                                                                                )
+                                                                )
+                                                )
+                                                .then(
+                                                        Commands.literal("name")
+                                                                .then(
+                                                                        Commands.argument(
+                                                                                        "name",
+                                                                                        StringArgumentType.string()
+                                                                                )
+                                                                                .executes(
+                                                                                        ImperfectNPCCommands::setNPCName
+                                                                                )
+                                                                )
+                                                )
+                                                .then(
+                                                        Commands.literal("wide_arms")
+                                                                .then(
+                                                                        Commands.argument(
+                                                                                        "wide_arms",
+                                                                                        BoolArgumentType.bool()
+                                                                                )
+                                                                                .executes(
+                                                                                        ImperfectNPCCommands::setNPCArms
+                                                                                )
+                                                                )
+                                                )
+                                                .then(
+                                                        Commands.literal("script")
+                                                                .then(
+                                                                        Commands.literal("clear")
+                                                                                .executes(
+                                                                                        ImperfectNPCCommands::clearNPCScript
+                                                                                )
+                                                                )
+                                                                .then(
+                                                                        Commands.argument(
+                                                                                        "script",
+                                                                                        StringArgumentType.greedyString()
+                                                                                )
+                                                                                .suggests(
+                                                                                        (context, builder) ->
+                                                                                                SharedSuggestionProvider.suggest(
+                                                                                                        ScriptManager.getFoundScripts(),
+                                                                                                        builder
+                                                                                                )
+                                                                                )
+                                                                                .executes(
+                                                                                        ImperfectNPCCommands::setNPCScript
+                                                                                )
+                                                                )
+                                                )
+                                )
                 )
-            )
         );
 
         dispatcher.register(Commands.literal("script")
-            .requires(cs -> cs.hasPermission(2))
+                .requires(cs -> cs.hasPermission(2))
 
-            .then(
-                Commands.literal("run")
                 .then(
-                    Commands.argument(
-                        "script",
-                        StringArgumentType.greedyString()
-                    )
-                    .suggests(
-                        (context, builder) ->
-                            SharedSuggestionProvider.suggest(
-                                ScriptManager.getFoundScripts(),
-                                builder
-                            )
-                    )
-                    .executes(
-                        ImperfectNPCCommands::runScript
-                    )
+                        Commands.literal("run")
+                                .then(
+                                        Commands.argument(
+                                                        "script",
+                                                        StringArgumentType.greedyString()
+                                                )
+                                                .suggests(
+                                                        (context, builder) ->
+                                                                SharedSuggestionProvider.suggest(
+                                                                        ScriptManager.getFoundScripts(),
+                                                                        builder
+                                                                )
+                                                )
+                                                .executes(
+                                                        ImperfectNPCCommands::runScript
+                                                )
+                                )
                 )
-            )
 
-            .then(
-                Commands.literal("reload")
-                    .executes(
-                        ImperfectNPCCommands::reloadScripts
-                    )
-            )
+                .then(
+                        Commands.literal("reload")
+                                .executes(
+                                        ImperfectNPCCommands::reloadScripts
+                                )
+                )
 
-            .then(
-                Commands.literal("errors")
-                    .executes(
-                        ImperfectNPCCommands::listErrors
-                    )
-            )
+                .then(
+                        Commands.literal("errors")
+                                .executes(
+                                        ImperfectNPCCommands::listErrors
+                                )
+                )
         );
+    }
+
+    private static int setNPCScript(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+
+        Entity entity = EntityArgument.getEntity(context, "entity");
+        String script = StringArgumentType.getString(context, "script");
+
+        if (!(entity instanceof NPCEntity npc)) {
+            source.sendFailure(
+                    Component.literal("Failed to set the script! Selected Entity is not an NPC!")
+            );
+
+            return 0;
+        }
+
+        if (!ScriptManager.getFoundScripts().contains(script)) {
+            source.sendFailure(
+                    Component.literal("Script not found.")
+            );
+
+            return 0;
+        }
+
+        npc.setScriptName(script);
+
+        source.sendSuccess(
+                () -> Component.literal(
+                        "Attached " + script + " to the NPC. It starts on the NPC's next tick."
+                ),
+                true
+        );
+
+        return 1;
+    }
+
+    private static int clearNPCScript(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+
+        Entity entity = EntityArgument.getEntity(context, "entity");
+
+        if (!(entity instanceof NPCEntity npc)) {
+            source.sendFailure(
+                    Component.literal("Failed to clear the script! Selected Entity is not an NPC!")
+            );
+
+            return 0;
+        }
+
+        npc.setScriptName("");
+
+        source.sendSuccess(
+                () -> Component.literal(
+                        "Removed the NPC's script."
+                ),
+                true
+        );
+
+        return 1;
     }
 
     private static int setNPCArms(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -275,10 +359,10 @@ public final class ImperfectNPCCommands {
 
         if (scriptResult.scriptSuccess()) {
             source.sendSuccess(
-                () -> Component.literal(
-                        "Successfully ran " + targetScript
-                ),
-                true
+                    () -> Component.literal(
+                            "Successfully ran " + targetScript
+                    ),
+                    true
             );
 
             return 1;

@@ -8,14 +8,14 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Keeps scripts that called wait() and resumes each one on the right server
+ * Keeps tasks that called wait() and resumes each one on the right server
  * tick. Everything here happens on the server thread.
  */
 final class LuaScheduler {
     private static final Logger logger = LogUtils.getLogger();
 
-    /** How many scripts may be waiting at once, so a command spammer can't pile up thousands. */
-    private static final int MAX_WAITING_SCRIPTS = 256;
+    /** How many tasks may be waiting at once, so nothing can pile up thousands. */
+    private static final int MAX_WAITING_TASKS = 256;
 
     private record Waiting(LuaScriptTask task, int resumeAtTick) {
     }
@@ -34,12 +34,33 @@ final class LuaScheduler {
     }
 
     boolean isFull() {
-        return waiting.size() >= MAX_WAITING_SCRIPTS;
+        return waiting.size() >= MAX_WAITING_TASKS;
     }
 
     /** Queues a task that just called wait(). */
     void add(LuaScriptTask task, int currentTick) {
         waiting.add(new Waiting(task, currentTick + task.getRequestedWaitTicks()));
+    }
+
+    /**
+     * Resumes a task right now and deals with the result: queue it if it
+     * waited, report the error if it failed. Used for NPC event handlers,
+     * which have no command to report back to.
+     */
+    void runNow(LuaScriptTask task, int currentTick) {
+        LuaEnvironment.Result result = task.resume();
+
+        switch (result.status()) {
+            case WAITING -> {
+                if (isFull()) {
+                    task.reportFailure("Too many scripts are waiting already, so this one was stopped.");
+                } else {
+                    add(task, currentTick);
+                }
+            }
+            case FAILED -> task.reportFailure(result.message());
+            case FINISHED -> logger.debug("{} finished", task.getScriptName());
+        }
     }
 
     void tick(int currentTick) {
@@ -62,17 +83,16 @@ final class LuaScheduler {
         }
 
         for (LuaScriptTask task : due) {
-            LuaScriptTask.Result result = task.resume();
-
-            switch (result.status()) {
-                case WAITING -> add(task, currentTick);
-                case FAILED -> task.reportFailure(result.message());
-                case FINISHED -> logger.debug("{} finished", task.getScriptName());
-            }
+            runNow(task, currentTick);
         }
     }
 
-    /** Drops every waiting script. There are no threads to stop, so forgetting them is enough. */
+    /** Drops every waiting task that belongs to one environment (e.g. a removed NPC's). */
+    void cancelEnvironment(LuaEnvironment environment) {
+        waiting.removeIf(entry -> entry.task().getEnvironment() == environment);
+    }
+
+    /** Drops every waiting task. There are no threads to stop, so forgetting them is enough. */
     int cancelAll() {
         int count = waiting.size();
 

@@ -1,14 +1,13 @@
 package net.righthandedvoid.imperfectnpcs.scripting.lua;
 
 import com.mojang.logging.LogUtils;
+import net.righthandedvoid.imperfectnpcs.api.ScriptNPC;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptContext;
+import net.righthandedvoid.imperfectnpcs.scripting.ScriptEvent;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptManager;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptRecord;
 import org.slf4j.Logger;
-import org.squiddev.cobalt.LuaError;
-import org.squiddev.cobalt.LuaState;
-import org.squiddev.cobalt.LuaTable;
-import org.squiddev.cobalt.Prototype;
+import org.squiddev.cobalt.*;
 import org.squiddev.cobalt.compiler.CompileException;
 import org.squiddev.cobalt.compiler.LuaC;
 import org.squiddev.cobalt.lib.Bit32Lib;
@@ -18,13 +17,17 @@ import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
+import java.util.function.Supplier;
 
 /**
  * Compiles Lua scripts and starts them.
  *
- * Every run gets its own LuaState (see LuaScriptTask), so scripts can't leave
- * anything behind for each other. A script that calls wait() is handed to the
- * scheduler, which resumes it on a later server tick.
+ * Every command run gets its own LuaState (see LuaEnvironment), so scripts
+ * can't leave anything behind for each other. A script attached to an NPC
+ * gets one LuaState for as long as the NPC is loaded (see LuaNpcInstance).
+ * Anything that calls wait() is handed to the scheduler, which resumes it on
+ * a later server tick.
  */
 public final class LuaScriptRunner {
     private static final Logger logger = LogUtils.getLogger();
@@ -33,6 +36,12 @@ public final class LuaScriptRunner {
     private final Map<String, Prototype> scriptCache = new HashMap<>();
 
     private final LuaScheduler scheduler = new LuaScheduler();
+
+    /** The running script instance of each NPC that has one, by NPC UUID. */
+    private final Map<UUID, LuaNPCInstance> npcInstances = new HashMap<>();
+
+    /** NPCs whose script failed to start, and which script it was. */
+    private final Map<UUID, String> failedNpcScripts = new HashMap<>();
 
     public void clearScriptCache() {
         scriptCache.clear();
@@ -66,10 +75,10 @@ public final class LuaScriptRunner {
             return new ScriptRecord(false, "Too many scripts are waiting already; not starting " + scriptName);
         }
 
-        LuaScriptTask task;
+        LuaEnvironment environment;
 
         try {
-            task = new LuaScriptTask(scriptName, prototype, context);
+            environment = new LuaEnvironment(scriptName, context);
 
         } catch (LuaError e) {
             logger.error("Failed to set up Lua environment for {}", scriptName, e);
@@ -77,8 +86,10 @@ public final class LuaScriptRunner {
             return new ScriptRecord(false, "Internal error setting up " + scriptName + ": " + e.getMessage());
         }
 
+        LuaScriptTask task = new LuaScriptTask(environment, environment.newThread(prototype), Constants.NONE);
+
         // The first stretch of the script runs right now, inside the command.
-        LuaScriptTask.Result result = task.resume();
+        LuaEnvironment.Result result = task.resume();
 
         return switch (result.status()) {
             case FINISHED -> new ScriptRecord(true, "Successfully ran " + scriptName);
@@ -107,13 +118,99 @@ public final class LuaScriptRunner {
         scheduler.tick(currentTick);
     }
 
-    /** Stops every waiting script. Returns how many were stopped. */
+    /**
+     * Stops every waiting script and throws away every NPC's script instance.
+     * NPCs restart their scripts on their next tick, so after a reload they
+     * pick up the new code. Returns how many waiting tasks were stopped.
+     */
     public int cancelAllTasks() {
+        npcInstances.values().forEach(LuaNPCInstance::close);
+        npcInstances.clear();
+        failedNpcScripts.clear();
+
         return scheduler.cancelAll();
     }
 
+    // region NPC scripts
+
+    /**
+     * Called every tick for each NPC that has a script attached. Starts the
+     * script the first time (running its top level and `init`), restarts it
+     * if the NPC's script was changed, and runs any queued events.
+     *
+     * @param npcId      The NPC's UUID.
+     * @param scriptName The script attached to the NPC.
+     * @param npc        Makes the NPC handle; only called when starting.
+     * @param context    Makes the script's context; only called when starting.
+     */
+    public void tickNpc(UUID npcId, String scriptName, Supplier<ScriptNPC> npc, Supplier<ScriptContext> context) {
+        LuaNPCInstance instance = npcInstances.get(npcId);
+
+        if (instance != null) {
+            if (instance.getScriptName().equals(scriptName)) {
+                instance.drainPending();
+                return;
+            }
+
+            // The NPC was given a different script: start over.
+            removeNpc(npcId);
+        }
+
+        // This script already failed to start on this NPC. Don't retry (and
+        // spam the error) every tick; a reload or a new script resets this.
+        if (scriptName.equals(failedNpcScripts.get(npcId))) return;
+
+        ScriptContext scriptContext = context.get();
+        Prototype prototype = scriptCache.get(scriptName);
+
+        if (prototype == null) {
+            failedNpcScripts.put(npcId, scriptName);
+
+            scriptContext.printError(scriptName.endsWith(".lua")
+                    ? scriptName + " couldn't start: it's missing or failed to compile (see /script errors)"
+                    : scriptName + " couldn't start: only Lua scripts can be attached to NPCs so far");
+
+            return;
+        }
+
+        try {
+            instance = new LuaNPCInstance(scriptName, npc.get(), scriptContext, scheduler);
+
+        } catch (LuaError e) {
+            logger.error("Failed to set up Lua environment for {}", scriptName, e);
+            failedNpcScripts.put(npcId, scriptName);
+
+            return;
+        }
+
+        npcInstances.put(npcId, instance);
+
+        if (!instance.start(prototype)) {
+            removeNpc(npcId);
+            failedNpcScripts.put(npcId, scriptName);
+        }
+    }
+
+    /** Sends an event to an NPC's script. Ignored if the NPC has no running script. */
+    public void fireNpcEvent(UUID npcId, ScriptEvent event) {
+        LuaNPCInstance instance = npcInstances.get(npcId);
+
+        if (instance != null) instance.fire(event);
+    }
+
+    /** Throws away an NPC's script instance, e.g. when the NPC unloads, dies or loses its script. */
+    public void removeNpc(UUID npcId) {
+        LuaNPCInstance instance = npcInstances.remove(npcId);
+
+        if (instance != null) instance.close();
+
+        failedNpcScripts.remove(npcId);
+    }
+
+    // endregion
+
     /** Builds the global environment a script sees. */
-    static LuaTable createGlobals(LuaState state, ScriptContext context, LuaTable waitToken) throws LuaError {
+    static LuaTable createGlobals(LuaState state, ScriptContext context, LuaTable waitToken, LuaTable npcMetatable) throws LuaError {
         // Cobalt's standard libraries leave out io, os, print, dofile,
         // loadfile and collectgarbage entirely, and this LuaState has no
         // bytecode format set, so load() only accepts source code. That's
@@ -130,7 +227,7 @@ public final class LuaScriptRunner {
 
         LuaPrintFunction.install(state, globals, context);
         LuaWaitFunction.install(state, globals, waitToken);
-        globals.rawset("npcs", LuaNPCLib.create(context));
+        globals.rawset("npcs", LuaNPCLib.create(context, npcMetatable));
 
         return globals;
     }

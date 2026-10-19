@@ -34,9 +34,12 @@ public final class LuaNPCLib {
     private LuaNPCLib() {
     }
 
-    /** Builds the global `npcs` table for one script run. */
-    public static LuaTable create(ScriptContext context) {
-        LuaTable meta = createMetatable();
+    /**
+     * Builds the global `npcs` table for one environment. `meta` is the NPC
+     * metatable from createMetatable(); the environment keeps it so it can
+     * wrap NPCs it passes to scripts itself, such as event.npc.
+     */
+    static LuaTable create(ScriptContext context, LuaTable meta) {
         LuaTable lib = new LuaTable();
 
         // npcs.spawn(x, y, z) -> npc
@@ -82,10 +85,11 @@ public final class LuaNPCLib {
     }
 
     /**
-     * The metatable every NPC object in one run shares. It's built per run
-     * rather than once globally, so nothing is shared between LuaStates.
+     * The metatable every NPC object in one environment shares. It's built per
+     * environment rather than once globally, so nothing is shared between
+     * LuaStates.
      */
-    private static LuaTable createMetatable() {
+    static LuaTable createMetatable() {
         LuaTable methods = new LuaTable();
 
         // Arguments start at 2 because argument 1 is always `self` (npc:method()).
@@ -163,7 +167,7 @@ public final class LuaNPCLib {
      * Turns a ScriptNPC into a Lua object. It's userdata rather than a table,
      * so scripts can't overwrite its methods.
      */
-    private static LuaUserdata wrap(ScriptNPC npc, LuaTable meta) {
+    static LuaUserdata wrap(ScriptNPC npc, LuaTable meta) {
         return ValueFactory.userdataOf(npc, meta);
     }
 
