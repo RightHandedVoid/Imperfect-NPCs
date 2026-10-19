@@ -38,6 +38,25 @@ public final class ScriptContext {
 
     public ServerLevel getLevel() { return level; }
 
+    /** The server's current tick number. The scheduler uses it to time wait(). */
+    public int getServerTick() { return level.getServer().getTickCount(); }
+
+    /**
+     * Reports an error that happens after the command that started the script
+     * has already returned, such as an error after a wait(). Errors always
+     * show, even once the print cap has been reached.
+     */
+    public void printError(String message) {
+        logger.warn("[{}] {}", scriptName, message);
+
+        if (source == null) return;
+
+        source.sendSystemMessage(
+                Component.literal("[" + scriptName + "] " + message)
+                        .withStyle(ChatFormatting.RED)
+        );
+    }
+
     /**
      * Shared output for every language's print / console.log.
      * Capped per run so a print inside a loop can't flood chat or the log.
