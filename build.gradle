@@ -19,13 +19,6 @@ sourceSets.main.resources {
 }
 
 repositories {
-    maven {
-        name = "SquidDev"
-        url = "https://maven.squiddev.cc"
-        content {
-            includeGroup("cc.tweaked")
-        }
-    }
 }
 
 base {
@@ -83,14 +76,14 @@ configurations {
 }
 
 dependencies {
-    jarJar(implementation('cc.tweaked:cobalt:0.9.9')) {
+    jarJar(implementation('org.luaj:luaj-jse:3.0.1')) {
         version {
-            strictly('[0.9.9]')
-            prefer('0.9.9')
+            strictly('[3.0.1]')
+            prefer('3.0.1')
         }
     }
 
-    additionalRuntimeClasspath 'cc.tweaked:cobalt:0.9.9'
+    additionalRuntimeClasspath 'org.luaj:luaj-jse:3.0.1'
 }
 
 var generateModMetadata = tasks.register("generateModMetadata", ProcessResources) {

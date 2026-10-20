@@ -16,7 +16,7 @@ displayName="${mod_name}" #mandatory
 authors="RightHandedVoid"
 
 description='''
-Modern successor to the old CustomNPCs mod for MC 1.12.2
+Example mod description.
 '''
 
 #[[mixins]]

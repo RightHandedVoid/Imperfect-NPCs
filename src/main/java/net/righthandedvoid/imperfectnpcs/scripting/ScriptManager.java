@@ -1,13 +1,11 @@
 package net.righthandedvoid.imperfectnpcs.scripting;
 
 import com.mojang.logging.LogUtils;
+import it.unimi.dsi.fastutil.Hash;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
-import net.righthandedvoid.imperfectnpcs.api.ScriptNPC;
-import net.righthandedvoid.imperfectnpcs.entities.NPCEntity;
 import net.righthandedvoid.imperfectnpcs.scripting.lua.LuaScriptRunner;
 import org.slf4j.Logger;
 
@@ -16,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 public class ScriptManager {
@@ -30,8 +29,6 @@ public class ScriptManager {
     }
 
     public static void onServerStop(ServerStoppedEvent event) {
-        luaScriptRunner.cancelAllTasks();
-
         scriptDirectory = null;
         scriptSources.clear();
         scriptRecords.clear();
@@ -39,44 +36,10 @@ public class ScriptManager {
         luaScriptRunner.clearScriptCache();
     }
 
-    public static void tick(MinecraftServer server) {
-        luaScriptRunner.tick(server.getTickCount());
-    }
 
-    /**
-     * Called every tick for each living NPC. Starts the NPC's script if it has
-     * one, or throws its old script away if it was cleared.
-     */
-    public static void tickNpc(NPCEntity npc) {
-        String scriptName = npc.getScriptName();
-
-        if (scriptName.isEmpty()) {
-            luaScriptRunner.removeNpc(npc.getUUID());
-            return;
-        }
-
-        luaScriptRunner.tickNpc(
-                npc.getUUID(),
-                scriptName,
-                () -> new ScriptNPC(npc),
-                () -> ScriptContext.forNpc(scriptName, (ServerLevel) npc.level())
-        );
-    }
-
-    /** Sends an event to an NPC's script, if it's running. */
-    public static void fireNpcEvent(NPCEntity npc, ScriptEvent event) {
-        luaScriptRunner.fireNpcEvent(npc.getUUID(), event);
-    }
-
-    /** Called when an NPC leaves the world (unloaded, killed or removed). */
-    public static void onNpcRemoved(UUID npcId) {
-        luaScriptRunner.removeNpc(npcId);
-    }
-
-
-    public static ScriptRecord runScript(String scriptName, ScriptContext context) {
+    public static ScriptRecord runScript(String scriptName) {
         return switch (scriptName.substring(scriptName.lastIndexOf('.') + 1)) {
-            case "lua" -> luaScriptRunner.run(scriptName, context);
+            case "lua" -> luaScriptRunner.run(scriptName);
 
             // there's definitely a better way to do this
 
@@ -125,9 +88,9 @@ public class ScriptManager {
         scriptRecords.forEach((name, scriptRecord) -> {
             if (!scriptRecord.scriptSuccess()) {
                 log.append(name)
-                        .append(" failed: ")
-                        .append(scriptRecord.message())
-                        .append("\n");
+                    .append(" failed: ")
+                    .append(scriptRecord.message())
+                    .append("\n");
             };
         });
 
@@ -155,28 +118,26 @@ public class ScriptManager {
     }
 
     public static void reloadScripts() {
-        luaScriptRunner.cancelAllTasks();
-
         scriptSources.clear();
         scriptRecords.clear();
         luaScriptRunner.clearScriptCache();
 
         try (Stream<Path> stream = Files.walk(scriptDirectory)) {
             stream
-                    .filter(Files::isRegularFile)
-                    .forEach(path -> {
-                        computeScriptSource(path);
-                        String scriptName = getScriptName(path);
+                .filter(Files::isRegularFile)
+                .forEach(path -> {
+                    computeScriptSource(path);
+                    String scriptName = getScriptName(path);
 
-                        if (scriptSources.get(scriptName) == null) return;
+                    if (scriptSources.get(scriptName) == null) return;
 
-                        if (getScriptExtension(path).equals("lua")) {
-                            ScriptRecord result = luaScriptRunner.cacheScript(scriptName);
+                    if (getScriptExtension(path).equals("lua")) {
+                        ScriptRecord result = luaScriptRunner.cacheScript(scriptName);
 
-                            scriptRecords.put(scriptName, result);
-                        }
+                        scriptRecords.put(scriptName, result);
+                    }
 
-                    });
+                });
         } catch (IOException e) {
             logger.error("Unable to read script directory: {}", scriptDirectory, e);
         }
