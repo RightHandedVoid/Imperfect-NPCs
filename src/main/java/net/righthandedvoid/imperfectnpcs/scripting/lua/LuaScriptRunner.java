@@ -1,6 +1,7 @@
 package net.righthandedvoid.imperfectnpcs.scripting.lua;
 
 import com.mojang.logging.LogUtils;
+import net.minecraft.commands.CommandSourceStack;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptManager;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptRecord;
 import org.luaj.vm2.*;
@@ -76,7 +77,7 @@ public final class LuaScriptRunner {
         return new ScriptRecord(true, (scriptName + " compiled successfully"));
     }
 
-    public ScriptRecord run(String scriptName) {
+    public ScriptRecord run(String scriptName, CommandSourceStack source) {
         Globals user_globals = new Globals();
 
         user_globals.load(new JseBaseLib());
@@ -99,7 +100,7 @@ public final class LuaScriptRunner {
         user_globals.set("package", LuaValue.NIL);
         user_globals.set("collectgarbage", LuaValue.NIL);
 
-        user_globals.set("print",  new LuaPrintFunction());
+        user_globals.set("print",  new LuaPrintFunction(source));
         user_globals.get("string").set("rep", new LuaStringRepFunction());
 
         try {

@@ -15,6 +15,10 @@ public class NPCEntity extends PathfinderMob {
             NPCEntity.class,
             EntityDataSerializers.STRING
     );
+    private static final EntityDataAccessor<Boolean> SLIM_ARMS = SynchedEntityData.defineId(
+            NPCEntity.class,
+            EntityDataSerializers.BOOLEAN
+    );
 
     public NPCEntity(
             EntityType<? extends PathfinderMob> entityType,
@@ -27,7 +31,11 @@ public class NPCEntity extends PathfinderMob {
 
     public String getSkinPath() { return this.entityData.get(SKIN_PATH); }
 
+    public Boolean isSlim() { return this.entityData.get(SLIM_ARMS); }
+
     public void setSkinPath(String s) { this.entityData.set(SKIN_PATH, s); }
+
+    public void setSlimArms(boolean b) { this.entityData.set(SLIM_ARMS, b); }
 
     public static AttributeSupplier.Builder createAttributes() {
         return PathfinderMob.createMobAttributes()
@@ -45,6 +53,7 @@ public class NPCEntity extends PathfinderMob {
         super.defineSynchedData(builder);
 
         builder.define(SKIN_PATH, "");
+        builder.define(SLIM_ARMS, false);
     }
 
     @Override
@@ -52,6 +61,7 @@ public class NPCEntity extends PathfinderMob {
         super.addAdditionalSaveData(compound);
 
         compound.putString("SkinPath", this.getSkinPath());
+        compound.putBoolean("SlimArms", this.isSlim());
     }
 
     @Override
@@ -60,6 +70,10 @@ public class NPCEntity extends PathfinderMob {
 
         if (compound.contains("SkinPath")) {
             this.setSkinPath(compound.getString("SkinPath"));
+        }
+
+        if (compound.contains("SlimArms")) {
+            this.setSlimArms(compound.getBoolean("SlimArms"));
         }
     }
 }

@@ -1,6 +1,8 @@
 package net.righthandedvoid.imperfectnpcs.command;
 
+import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -19,6 +21,7 @@ import net.righthandedvoid.imperfectnpcs.entities.NPCEntity;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptManager;
 import net.righthandedvoid.imperfectnpcs.scripting.ScriptRecord;
 
+import java.util.ArrayList;
 import java.util.Collection;
 
 public final class ImperfectNPCCommands {
@@ -27,7 +30,7 @@ public final class ImperfectNPCCommands {
             CommandDispatcher<CommandSourceStack> dispatcher
     ) {
         dispatcher.register(
-            Commands.literal("imperfectnpcs")
+            Commands.literal("npcs")
                 .requires(cs -> cs.hasPermission(2))
 
                 .then(
@@ -57,40 +60,6 @@ public final class ImperfectNPCCommands {
                 )
 
                 .then(
-                    Commands.literal("run")
-                        .then(
-                            Commands.argument(
-                            "script",
-                                StringArgumentType.greedyString()
-                            )
-                            .suggests(
-                                (context, builder) ->
-                                    SharedSuggestionProvider.suggest(
-                                        ScriptManager.getFoundScripts(),
-                                        builder
-                                    )
-                            )
-                            .executes(
-                                ImperfectNPCCommands::runScript
-                            )
-                        )
-                )
-
-                .then(
-                    Commands.literal("reload")
-                        .executes(
-                            ImperfectNPCCommands::reloadScripts
-                        )
-                )
-
-                .then(
-                    Commands.literal("errors")
-                        .executes(
-                            ImperfectNPCCommands::listErrors
-                        )
-                )
-
-                .then(
                     Commands.literal("edit")
                         .then(
                             Commands.argument(
@@ -110,9 +79,86 @@ public final class ImperfectNPCCommands {
                                 )
 
                             )
+                            .then(
+                                Commands.literal("arms")
+                                .then(
+                                    Commands.argument(
+                                        "arms",
+                                        BoolArgumentType.bool()
+                                    )
+                                    .executes(
+                                        ImperfectNPCCommands::setNPCArms
+                                    )
+                                )
+                            )
                         )
                 )
         );
+
+        dispatcher.register(
+            Commands.literal("scripts")
+                .requires(commandSourceStack -> commandSourceStack.hasPermission(2))
+
+                .then(
+                    Commands.literal("run")
+                        .then(
+                            Commands.argument(
+                                    "script",
+                                    StringArgumentType.greedyString()
+                                )
+                                .suggests(
+                                    (context, builder) ->
+                                        SharedSuggestionProvider.suggest(
+                                            ScriptManager.getFoundScripts(),
+                                            builder
+                                        )
+                                )
+                                .executes(
+                                    ImperfectNPCCommands::runScript
+                                )
+                        )
+                )
+
+                .then(
+                    Commands.literal("reload")
+                        .executes(
+                            ImperfectNPCCommands::reloadScripts
+                        )
+                )
+
+                .then(
+                    Commands.literal("errors")
+                        .executes(
+                            ImperfectNPCCommands::listErrors
+                        )
+                )
+        );
+    }
+
+    private static int setNPCArms(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
+        CommandSourceStack source = context.getSource();
+
+        Entity entity = EntityArgument.getEntity(context, "entity");
+        boolean isSlim = BoolArgumentType.getBool(context, "arms");
+
+        if (entity instanceof NPCEntity npc) {
+            npc.setSlimArms(isSlim);
+
+            source.sendSuccess(
+                () -> Component.literal(
+                    "Successfully changed the skin's arms!"
+                ),
+                true
+            );
+
+            return 1;
+        } else {
+            source.sendFailure(
+                Component.literal("Failed to change the skin's arms! Selected Entity is not an NPC!")
+            );
+
+            return 0;
+        }
     }
 
     private static int setNPCSkin(CommandContext<CommandSourceStack> context) throws CommandSyntaxException {
@@ -191,7 +237,7 @@ public final class ImperfectNPCCommands {
             return 0;
         }
 
-        ScriptRecord scriptResult = ScriptManager.runScript(targetScript);
+        ScriptRecord scriptResult = ScriptManager.runScript(targetScript, source);
 
         if (scriptResult.scriptSuccess()) {
             source.sendSuccess(

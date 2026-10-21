@@ -2,6 +2,7 @@ package net.righthandedvoid.imperfectnpcs.scripting;
 
 import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.Hash;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelResource;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
@@ -37,9 +38,9 @@ public class ScriptManager {
     }
 
 
-    public static ScriptRecord runScript(String scriptName) {
+    public static ScriptRecord runScript(String scriptName, CommandSourceStack source) {
         return switch (scriptName.substring(scriptName.lastIndexOf('.') + 1)) {
-            case "lua" -> luaScriptRunner.run(scriptName);
+            case "lua" -> luaScriptRunner.run(scriptName, source);
 
             // there's definitely a better way to do this
 
